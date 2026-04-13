@@ -26,13 +26,11 @@ const app = express();
 // Connect to database
 connectDB();
 
-// Security middleware - must be early in the chain
+// Security middleware
 app.use(helmet({
   contentSecurityPolicy: ENV.NODE_ENV === 'production',
   crossOriginEmbedderPolicy: ENV.NODE_ENV === 'production'
 }));
-
-// Security middleware - must be early in the chain
 
 // CORS configuration
 app.use(cors({
@@ -42,11 +40,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Body parsing middleware
+// Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging middleware (development only)
+// Request logging (development only)
 if (ENV.NODE_ENV === 'development') {
   app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
@@ -55,7 +53,9 @@ if (ENV.NODE_ENV === 'development') {
   });
 }
 
-// Rate limiting for all API routes
+// ================= RATE LIMITERS =================
+
+// General API limiter
 const apiLimiter = rateLimit({
   windowMs: RATE_LIMIT.WINDOW_MS,
   max: RATE_LIMIT.MAX_REQUESTS,
@@ -67,7 +67,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Stricter rate limiting for auth routes
+// Auth limiter
 const authLimiter = rateLimit({
   windowMs: RATE_LIMIT.AUTH_WINDOW_MS,
   max: RATE_LIMIT.AUTH_MAX_REQUESTS,
@@ -77,17 +77,21 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true // Don't count successful requests
+  skipSuccessfulRequests: true
 });
 
-// Apply rate limiters
-app.use('/api/', apiLimiter);
-// The authLimiter is now applied directly to the authRoutes below,
-// so this general application for /api/auth is no longer needed.
-// app.use('/api/auth', authLimiter);
+// ================= APPLY MIDDLEWARE =================
 
-// Routes
-app.use('/api/auth', authLimiter, authRoutes);
+// ✅ Apply rate limiting ONLY in production
+if (ENV.NODE_ENV === 'production') {
+  app.use('/api/', apiLimiter);
+  app.use('/api/auth', authLimiter, authRoutes);
+} else {
+  // ❌ No rate limiting in development
+  app.use('/api/auth', authRoutes);
+}
+
+// Other routes (no limiter in dev)
 app.use('/api/user', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/ngo', ngoRoutes);
@@ -96,10 +100,10 @@ app.use('/api/donate', donationRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/volunteer', volunteerProfileRoutes);
 
-// Health check endpoint
+// Health check
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    success: true, 
+  res.status(200).json({
+    success: true,
     message: 'Server is running',
     environment: ENV.NODE_ENV,
     timestamp: new Date().toISOString(),
@@ -107,7 +111,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 404 handler for undefined routes
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -116,7 +120,7 @@ app.use((req, res) => {
   });
 });
 
-// Global error handling middleware (MUST be last)
+// Error handler
 app.use(errorHandler);
 
 // Start server
@@ -128,19 +132,15 @@ const server = app.listen(PORT, () => {
   console.log(`💚 Health: http://localhost:${PORT}/api/health\n`);
 });
 
-// Graceful shutdown handler
+// Graceful shutdown
 const gracefulShutdown = async (signal) => {
   console.log(`\n⚠️  ${signal} received. Starting graceful shutdown...`);
-  
-  // Stop accepting new connections
+
   server.close(async () => {
     console.log('✅ HTTP server closed');
-    
+
     try {
-      // Close database connection (handled in db.js)
       console.log('🔄 Closing database connections...');
-      // Database shutdown is handled by db.js event handlers
-      
       console.log('✅ Graceful shutdown complete');
       process.exit(0);
     } catch (err) {
@@ -149,28 +149,23 @@ const gracefulShutdown = async (signal) => {
     }
   });
 
-  // Force shutdown after 10 seconds
   setTimeout(() => {
     console.error('⚠️  Forcing shutdown after timeout');
     process.exit(1);
   }, 10000);
 };
 
-// Handle process termination signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
-  console.error('💥 UNCAUGHT EXCEPTION! Shutting down...');
+  console.error('💥 UNCAUGHT EXCEPTION!');
   console.error(err.name, err.message);
-  console.error(err.stack);
   process.exit(1);
 });
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
-  console.error('💥 UNHANDLED REJECTION! Shutting down...');
+  console.error('💥 UNHANDLED REJECTION!');
   console.error(err.name, err.message);
   server.close(() => {
     process.exit(1);
