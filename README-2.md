@@ -133,8 +133,13 @@ Run inside container:
 
 ```
 docker exec -it server node seedAdmin.js
-```
 
+```
+Run inside kubernetes container:
+```
+kubectl exec -it server-5c6549b489-h5jp2 -- node seedAdmin.js
+
+```
 ---
 
 ## 🔐 Default Admin Credentials

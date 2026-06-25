@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   mongo:
-    image: mongo:6
+    image: mongo:7
     container_name: mongo
     restart: always
     ports:
@@ -11,24 +11,24 @@ services:
       - mongo-data:/data/db
 
   server:
-    build: ./Server
+    build: ./server
     container_name: server
     restart: always
     ports:
       - "5000:5000"
     env_file:
-      - ./Server/.env
+      - ./server/.env
     depends_on:
       - mongo
 
   client:
-    build: ./volunteer-platform
+    build: ./client
     container_name: client
     restart: always
     ports:
       - "5173:5173"
     env_file:
-      - ./volunteer-platform/.env
+      - ./client/.env
     depends_on:
       - server
 
